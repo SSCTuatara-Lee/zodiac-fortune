@@ -15,9 +15,9 @@ export async function onRequest(context) {
     });
   }
 
-  const { zodiacIndex, birthday } = body;
-  if (typeof zodiacIndex !== 'number' || !birthday) {
-    return new Response(JSON.stringify({ error: 'Missing zodiacIndex or birthday.' }), {
+  const { zodiacIndex } = body;
+  if (typeof zodiacIndex !== 'number') {
+    return new Response(JSON.stringify({ error: 'Missing zodiacIndex.' }), {
       status: 400,
       headers: { 'content-type': 'application/json' },
     });
@@ -33,9 +33,8 @@ export async function onRequest(context) {
 
   const model = 'deepseek-v4-flash';
   const prompt =
-    `你是一名中文星座运势专家，需要为星座用户生成当天真实且专业的运势解读。请基于用户的星座和生日，输出一个 JSON 对象。不要包含任何多余说明，也不要输出非 JSON 文本。返回字段如下：overall, love, career, wealth, health, tarotName, tarotMeaning, luckyNumber, luckyColor, luckyStone, goldenTime, motto。` +
+    `你是一名中文星座运势专家，需要为星座用户生成当天真实且专业的运势解读。请基于用户的星座，输出一个 JSON 对象。不要包含任何多余说明，也不要输出非 JSON 文本。返回字段如下：overall, love, career, wealth, health, tarotName, tarotMeaning, luckyNumber, luckyColor, luckyStone, goldenTime, motto。` +
     `\n星座索引: ${zodiacIndex}` +
-    `\n生日: ${birthday}` +
     `\n要求：内容应富有星象学和占星分析感，兼顾实用建议和情绪提示。每个字段文字控制在 15-40 个汉字。`;
 
   const apiUrl = env.DEESEEK_BASE_URL || 'https://api.deepseek.com/v1/responses';

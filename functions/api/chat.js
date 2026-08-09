@@ -15,12 +15,15 @@ export async function onRequest(context) {
     });
   }
 
-  const { zodiacIndex, birthday, message } = body;
-  if (typeof zodiacIndex !== 'number' || !birthday || !message) {
-    return new Response(JSON.stringify({ error: 'Missing zodiacIndex, birthday or message.' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    });
+  const { zodiacIndex, zodiacName, message } = body;
+  if (typeof zodiacIndex !== 'number' || !zodiacName || !message) {
+    return new Response(
+      JSON.stringify({ error: 'Missing zodiacIndex, zodiacName or message.' }),
+      {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      },
+    );
   }
 
   const apiKey = env.DEESEEK_API_KEY || env.DEEPSEEK_API_KEY;
@@ -33,9 +36,9 @@ export async function onRequest(context) {
 
   const apiUrl = env.DEESEEK_BASE_URL || 'https://api.deepseek.com/v1/responses';
   const prompt =
-    `你是一名中文星座运势专家。根据用户的生日和星座索引提供专业运势咨询。不要输出 JSON，仅返回自然语言回答。` +
+    `你是一名中文星座运势专家。根据用户的星座名称和星座索引提供专业运势咨询。不要输出 JSON，仅返回自然语言回答。` +
+    `\n星座名称: ${zodiacName}` +
     `\n星座索引: ${zodiacIndex}` +
-    `\n生日: ${birthday}` +
     `\n用户问题: ${message}` +
     `\n回答应简洁、有洞察力，并给出实际建议。`;
 
