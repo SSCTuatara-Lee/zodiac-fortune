@@ -73,22 +73,35 @@ export async function onRequest(context) {
   }
 
   const rawOutput = apiResponse.output_text || apiResponse.response?.output_text ||
-    (Array.isArray(apiResponse.output) ? apiResponse.output.map(item => item.content || '').join('') : '');
+    (Array.isArray(apiResponse.output) ? apiResponse.output.map(item => item.content || '').join('') : '') ||
+    (Array.isArray(apiResponse.response?.output) ? apiResponse.response.output.map(item => item.content || '').join('') : '');
 
   if (!rawOutput) {
-    return new Response(JSON.stringify({ error: 'DeepSeek response did not contain output_text.' }), {
+    return new Response(JSON.stringify({ error: 'DeepSeek response did not contain output_text.', apiResponse }), {
       status: 502,
       headers: { 'content-type': 'application/json' },
     });
   }
 
+  const trimmedOutput = rawOutput.trim();
+  const jsonStart = trimmedOutput.indexOf('{');
+  const jsonEnd = trimmedOutput.lastIndexOf('}');
+  const jsonText = jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart
+    ? trimmedOutput.slice(jsonStart, jsonEnd + 1)
+    : trimmedOutput;
+
   try {
-    const parsed = JSON.parse(rawOutput);
+    const parsed = JSON.parse(jsonText);
     return new Response(JSON.stringify({ data: parsed }), {
       headers: { 'content-type': 'application/json' },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'Failed to parse DeepSeek response as JSON.', rawOutput }), {
+    return new Response(JSON.stringify({
+      error: 'Failed to parse DeepSeek response as JSON.',
+      parseError: error.message,
+      rawOutput: trimmedOutput,
+      apiResponse,
+    }), {
       status: 502,
       headers: { 'content-type': 'application/json' },
     });

@@ -1166,17 +1166,22 @@
                     body: JSON.stringify({ zodiacIndex: index, birthday }),
                 });
 
-                const payload = await response.json();
+                const payload = await response.json().catch(() => ({ error: '无法解析 API 返回内容' }));
                 if (!response.ok) {
-                    throw new Error(payload.error || `HTTP ${response.status}`);
+                    const errorMessage = payload.error || payload.message || `HTTP ${response.status}`;
+                    throw new Error(errorMessage);
                 }
 
-                const data = payload.data;
+                if (!payload.data) {
+                    throw new Error(payload.error || 'API 未返回有效数据');
+                }
+
                 statusEl.textContent = 'AI 运势加载完成。';
-                return data;
+                return payload.data;
             } catch (error) {
-                statusEl.textContent = 'AI 接口调用失败，已回退到本地运势逻辑。';
-                console.warn(error);
+                const message = error?.message || '未知错误';
+                statusEl.textContent = `AI 接口调用失败：${message}，已回退到本地运势逻辑。`;
+                console.warn('AI fortune error:', error);
                 return generateFortune(index);
             }
         }
