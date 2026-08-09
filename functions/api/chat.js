@@ -31,7 +31,7 @@ export async function onRequest(context) {
     });
   }
 
-  const apiUrl = env.DEESEEK_BASE_URL || 'https://api.deepseek.com';
+  const apiUrl = env.DEESEEK_BASE_URL || 'https://api.deepseek.com/v1/responses';
   const prompt =
     `你是一名中文星座运势专家。根据用户的生日和星座索引提供专业运势咨询。不要输出 JSON，仅返回自然语言回答。` +
     `\n星座索引: ${zodiacIndex}` +

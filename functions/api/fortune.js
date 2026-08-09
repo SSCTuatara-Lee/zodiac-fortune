@@ -38,7 +38,7 @@ export async function onRequest(context) {
     `\n生日: ${birthday}` +
     `\n要求：内容应富有星象学和占星分析感，兼顾实用建议和情绪提示。每个字段文字控制在 15-40 个汉字。`;
 
-  const apiUrl = env.DEESEEK_BASE_URL || 'https://api.deepseek.com';
+  const apiUrl = env.DEESEEK_BASE_URL || 'https://api.deepseek.com/v1/responses';
 
   let apiResponse;
   try {
