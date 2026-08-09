@@ -80,19 +80,24 @@ export async function onRequest(context) {
     );
   }
 
-  const rawOutput =
-    apiResponse.output_text ||
-    apiResponse.response?.output_text ||
-    (Array.isArray(apiResponse.output)
-      ? apiResponse.output.map((item) => item.content || '').join('')
-      : '') ||
-    (Array.isArray(apiResponse.response?.output)
-      ? apiResponse.response.output.map((item) => item.content || '').join('')
-      : '');
+  function gatherTextFields(value) {
+    if (typeof value === 'string') return [value];
+    if (Array.isArray(value)) return value.flatMap(gatherTextFields);
+    if (value && typeof value === 'object') return Object.values(value).flatMap(gatherTextFields);
+    return [];
+  }
 
+  const textCandidates = [
+    apiResponse.output_text,
+    apiResponse.response?.output_text,
+    ...gatherTextFields(apiResponse.output),
+    ...gatherTextFields(apiResponse.response?.output),
+  ].filter((item) => typeof item === 'string' && item.trim().length > 0);
+
+  const rawOutput = textCandidates.length > 0 ? textCandidates.join('\n') : '';
   if (!rawOutput) {
     return new Response(
-      JSON.stringify({ error: 'DeepSeek response did not contain output_text.', apiResponse }),
+      JSON.stringify({ error: 'DeepSeek response did not contain parseable text.', apiResponse }),
       {
         status: 502,
         headers: { 'content-type': 'application/json' },
@@ -121,14 +126,20 @@ export async function onRequest(context) {
   }
 
   function tryParseJson(text) {
+    const cleaned = text
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/\r\n|\n|\r/g, ' ')
+      .trim();
+
     try {
-      return JSON.parse(text);
+      return JSON.parse(cleaned);
     } catch {
-      const normalized = text
-        .replace(/```[\s\S]*?```/g, '')
-        .replace(/\r\n|\n|\r/g, ' ')
-        .replace(/([\{,])\s*([A-Za-z0-9_]+)\s*:/g, '$1"$2":')
-        .replace(/'([^']*)'/g, '"$1"');
+      const normalized = cleaned
+        .replace(/([\{,\[])\s*([A-Za-z0-9_]+)\s*:/g, '$1"$2":')
+        .replace(/'([^']*)'/g, '"$1"')
+        .replace(/,\s*([\]}])/g, '$1')
+        .replace(/\[\s*,/g, '[')
+        .replace(/\{\s*,/g, '{');
       try {
         return JSON.parse(normalized);
       } catch {

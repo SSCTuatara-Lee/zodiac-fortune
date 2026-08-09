@@ -78,19 +78,24 @@ export async function onRequest(context) {
     );
   }
 
-  const rawOutput =
-    apiResponse.output_text ||
-    apiResponse.response?.output_text ||
-    (Array.isArray(apiResponse.output)
-      ? apiResponse.output.map((item) => item.content || '').join('')
-      : '') ||
-    (Array.isArray(apiResponse.response?.output)
-      ? apiResponse.response.output.map((item) => item.content || '').join('')
-      : '');
+  function gatherTextFields(value) {
+    if (typeof value === 'string') return [value];
+    if (Array.isArray(value)) return value.flatMap(gatherTextFields);
+    if (value && typeof value === 'object') return Object.values(value).flatMap(gatherTextFields);
+    return [];
+  }
 
+  const textCandidates = [
+    apiResponse.output_text,
+    apiResponse.response?.output_text,
+    ...gatherTextFields(apiResponse.output),
+    ...gatherTextFields(apiResponse.response?.output),
+  ].filter((item) => typeof item === 'string' && item.trim().length > 0);
+
+  const rawOutput = textCandidates.length > 0 ? textCandidates.join('\n') : '';
   if (!rawOutput) {
     return new Response(
-      JSON.stringify({ error: 'DeepSeek response did not contain output_text.', apiResponse }),
+      JSON.stringify({ error: 'DeepSeek response did not contain parseable text.', apiResponse }),
       {
         status: 502,
         headers: { 'content-type': 'application/json' },
