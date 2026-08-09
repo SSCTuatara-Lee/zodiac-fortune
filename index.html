@@ -179,6 +179,91 @@
             justify-content: center;
         }
 
+        .chat-panel {
+            background: rgba(20, 20, 50, 0.85);
+            border: 1px solid rgba(160, 120, 240, 0.2);
+            border-radius: 22px;
+            padding: 20px;
+            margin-top: 18px;
+            backdrop-filter: blur(18px);
+        }
+        .chat-panel .chat-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .chat-panel .chat-hint {
+            font-size: 0.82rem;
+            color: #b9b4ff;
+            margin-bottom: 16px;
+            line-height: 1.4;
+        }
+        .chat-window {
+            max-height: 320px;
+            overflow-y: auto;
+            padding: 12px;
+            border-radius: 16px;
+            background: rgba(10, 10, 30, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            margin-bottom: 12px;
+        }
+        .chat-message {
+            margin-bottom: 12px;
+            display: flex;
+            gap: 10px;
+        }
+        .chat-message.user {
+            justify-content: flex-end;
+        }
+        .chat-message .message-bubble {
+            max-width: 82%;
+            padding: 12px 14px;
+            border-radius: 18px;
+            line-height: 1.6;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .chat-message.user .message-bubble {
+            background: rgba(99, 102, 241, 0.9);
+            color: #fff;
+            border-bottom-right-radius: 6px;
+        }
+        .chat-message.ai .message-bubble {
+            background: rgba(255, 255, 255, 0.08);
+            color: #e8e8ff;
+            border-bottom-left-radius: 6px;
+        }
+        .chat-input-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .chat-input-row input {
+            flex: 1;
+            padding: 12px 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(16, 16, 42, 0.9);
+            color: #e8e8ff;
+            outline: none;
+            font-size: 0.92rem;
+        }
+        .chat-input-row button {
+            padding: 12px 16px;
+            border-radius: 14px;
+            border: none;
+            background: linear-gradient(135deg, #6d5df0, #9b7cfc);
+            color: #fff;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .chat-input-row button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 25px rgba(100, 70, 220, 0.35);
+        }
+
         /* ── 星座网格 ── */
         .section-label {
             font-size: 0.7rem;
@@ -769,6 +854,21 @@
                 <span class="motto-icon">💫</span>
                 <span id="mottoText"></span>
             </div>
+
+            <!-- AI 聊天 -->
+            <div class="chat-panel">
+                <div class="chat-title">AI 运势咨询</div>
+                <div class="chat-hint" id="chatHint">当前星座：白羊座 · 生日：今天</div>
+                <div class="chat-window" id="chatWindow">
+                    <div class="chat-message ai">
+                        <div class="message-bubble">欢迎询问你的今日运势、爱情、事业、财运或健康建议。</div>
+                    </div>
+                </div>
+                <div class="chat-input-row">
+                    <input id="chatInput" type="text" placeholder="问一个关于你星座的问题..." />
+                    <button id="chatSendButton">发送</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1249,29 +1349,124 @@
             card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
+        function renderChatMessage(role, text) {
+            const chatWindow = document.getElementById('chatWindow');
+            const wrapper = document.createElement('div');
+            wrapper.className = `chat-message ${role}`;
+            wrapper.innerHTML = `<div class="message-bubble">${text}</div>`;
+            chatWindow.appendChild(wrapper);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        function getZodiacIndexFromBirthday(value) {
+            if (!value) return -1;
+            const parts = value.split('-');
+            if (parts.length !== 3) return -1;
+            const mmdd = parts[1] + parts[2];
+            for (let i = 0; i < zodiacData.length; i++) {
+                const z = zodiacData[i];
+                if (z.startMD > z.endMD) {
+                    if (mmdd >= z.startMD || mmdd <= z.endMD) return i;
+                } else if (mmdd >= z.startMD && mmdd <= z.endMD) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        function getChatContext() {
+            const birthday = document.getElementById('birthdayInput').value || '';
+            const activeButton = document.querySelector('.zodiac-btn.active');
+            let zodiacIndex = activeButton ? Number(activeButton.dataset.index) : -1;
+            if (zodiacIndex < 0) {
+                const derivedIndex = getZodiacIndexFromBirthday(birthday);
+                zodiacIndex = derivedIndex >= 0 ? derivedIndex : (new Date().getDate() % 12);
+            }
+            const zodiacName = zodiacData[zodiacIndex]?.name || '星座待选';
+            return { zodiacIndex, zodiacName, birthday };
+        }
+
+        function updateChatContextHint(index, birthday) {
+            const zodiac = zodiacData[index];
+            const hint = document.getElementById('chatHint');
+            const displayDate = birthday || '未设置生日';
+            if (zodiac) {
+                hint.textContent = `当前星座：${zodiac.name} · 生日：${displayDate}`;
+            } else {
+                hint.textContent = `当前星座：未选择 · 生日：${displayDate}`;
+            }
+        }
+
+        async function sendChatQuestion() {
+            const input = document.getElementById('chatInput');
+            const question = input.value.trim();
+            if (!question) return;
+            input.value = '';
+            renderChatMessage('user', question);
+            const statusEl = document.getElementById('statusBar');
+            statusEl.textContent = '正在与 AI 对话，请稍候...';
+
+            const { zodiacIndex, zodiacName, birthday } = getChatContext();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ zodiacIndex, zodiacName, birthday, message: question }),
+                });
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.error || `HTTP ${response.status}`);
+                }
+                renderChatMessage('ai', payload.answer || 'AI 未返回内容，请稍后再试。');
+                statusEl.textContent = 'AI 问答已更新。';
+                updateChatContextHint(zodiacIndex, birthday);
+            } catch (error) {
+                statusEl.textContent = `AI 问答失败：${error.message}`;
+                renderChatMessage('ai', 'AI 问答失败，请稍后再试。');
+                console.warn('Chat error:', error);
+            }
+        }
+
+        function bindChatEvents() {
+            const sendButton = document.getElementById('chatSendButton');
+            const chatInput = document.getElementById('chatInput');
+            sendButton.addEventListener('click', sendChatQuestion);
+            chatInput.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    sendChatQuestion();
+                }
+            });
+        }
+
         function findZodiacByBirthday() {
             const input = document.getElementById('birthdayInput');
             const value = input.value;
             if (!value) { alert('请先选择生日日期 📅'); return; }
-            const parts = value.split('-');
-            const mmdd = parts[1] + parts[2];
-            let index = -1;
-            for (let i = 0; i < zodiacData.length; i++) {
-                const z = zodiacData[i];
-                if (z.startMD > z.endMD) { if (mmdd >= z.startMD || mmdd <= z.endMD) { index = i; break; } } else { if (
-                        mmdd >= z.startMD && mmdd <= z.endMD) { index = i; break; } }
-            }
-            if (index === -1) index = 0;
-            selectZodiac(index);
+            const index = getZodiacIndexFromBirthday(value);
+            selectZodiac(index >= 0 ? index : 0);
+        }
+
+        function initChatContextListeners() {
+            const birthdayInput = document.getElementById('birthdayInput');
+            birthdayInput.addEventListener('change', () => {
+                const birthday = birthdayInput.value;
+                const derivedIndex = getZodiacIndexFromBirthday(birthday);
+                updateChatContextHint(derivedIndex >= 0 ? derivedIndex : (new Date().getDate() % 12), birthday);
+            });
         }
 
         function init() {
             renderZodiacGrid();
             const today = new Date();
-            document.getElementById('birthdayInput').value =
-                `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+            const birthdayValue = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+            document.getElementById('birthdayInput').value = birthdayValue;
             const todayIdx = today.getDate() % 12;
             selectZodiac(todayIdx);
+            bindChatEvents();
+            initChatContextListeners();
+            updateChatContextHint(todayIdx, birthdayValue);
         }
         init();
     </script>
