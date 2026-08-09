@@ -164,6 +164,21 @@
             white-space: nowrap;
         }
 
+        .status-bar {
+            margin: 12px 0 16px;
+            padding: 10px 14px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #d8d8f0;
+            font-size: 0.86rem;
+            text-align: center;
+            min-height: 34px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         /* ── 星座网格 ── */
         .section-label {
             font-size: 0.7rem;
@@ -649,6 +664,8 @@
             </div>
         </div>
 
+        <div class="status-bar" id="statusBar">AI 运势接口准备就绪。</div>
+
         <!-- 生日行 -->
         <div class="section-label">📅 查询你的星座</div>
         <div class="birthday-row">
@@ -1130,20 +1147,57 @@
             return html + ` <span style="color:#f0c060;font-size:0.85rem;margin-left:6px;">${count}</span>`;
         }
 
-        function selectZodiac(index) {
+        function parseJSONFromText(text) {
+            const start = text.indexOf('{');
+            const end = text.lastIndexOf('}');
+            if (start === -1 || end === -1) {
+                throw new Error('No JSON object found in response');
+            }
+            return JSON.parse(text.slice(start, end + 1));
+        }
+
+        async function fetchFortuneFromAI(index, birthday) {
+            const statusEl = document.getElementById('statusBar');
+            statusEl.textContent = '正在调用 DeepSeek AI 生成运势，请稍候...';
+            try {
+                const response = await fetch('/api/fortune', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ zodiacIndex: index, birthday }),
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.error || `HTTP ${response.status}`);
+                }
+
+                const data = payload.data;
+                statusEl.textContent = 'AI 运势加载完成。';
+                return data;
+            } catch (error) {
+                statusEl.textContent = 'AI 接口调用失败，已回退到本地运势逻辑。';
+                console.warn(error);
+                return generateFortune(index);
+            }
+        }
+
+        async function selectZodiac(index) {
             document.querySelectorAll('.zodiac-btn').forEach(b => b.classList.remove('active'));
             const btn = document.querySelector(`.zodiac-btn[data-index="${index}"]`);
             if (btn) btn.classList.add('active');
 
-            const fortune = generateFortune(index);
+            const birthdayValue = document.getElementById('birthdayInput').value;
+            const fortune = await fetchFortuneFromAI(index, birthdayValue);
 
             // 星象概览
-            document.getElementById('moonPhaseIcon').textContent = fortune.moonPhase.icon;
-            document.getElementById('moonPhaseText').textContent = fortune.moonPhase.text;
+            const moonPhase = fortune.moonPhase || getMoonPhase();
+            const planet = fortune.planet || getPlanetaryFocus(seededRandom(getTodaySeed(index)));
+            document.getElementById('moonPhaseIcon').textContent = moonPhase.icon;
+            document.getElementById('moonPhaseText').textContent = moonPhase.text;
             document.getElementById('planetTags').innerHTML = `
-            <span class="planet-tag">${fortune.planet.name}</span>
-            <span class="planet-tag">${fortune.planet.aspect}</span>
-            <span style="font-size:0.72rem;color:#8888b0;margin-left:4px;">${fortune.planet.effect}</span>
+            <span class="planet-tag">${planet.name}</span>
+            <span class="planet-tag">${planet.aspect}</span>
+            <span style="font-size:0.72rem;color:#8888b0;margin-left:4px;">${planet.effect}</span>
           `;
 
             // 运势卡片
@@ -1152,41 +1206,41 @@
             void card.offsetWidth;
             card.classList.add('visible');
 
-            document.getElementById('cardEmoji').textContent = fortune.zodiac.emoji;
-            document.getElementById('cardName').textContent = fortune.zodiac.name;
+            const zodiac = zodiacData[index];
+            document.getElementById('cardEmoji').textContent = zodiac.emoji;
+            document.getElementById('cardName').textContent = zodiac.name;
             const badge = document.getElementById('elementBadge');
-            badge.textContent = fortune.zodiac.elementCN + ' · 守护星：' + fortune.zodiac.ruler;
-            badge.className = 'element-badge ' + fortune.zodiac.element;
+            badge.textContent = zodiac.elementCN + ' · 守护星：' + zodiac.ruler;
+            badge.className = 'element-badge ' + zodiac.element;
 
-            document.getElementById('starsRow').innerHTML = renderStars(fortune.overallStars);
-            document.getElementById('overviewText').textContent = fortune.overall;
+            document.getElementById('starsRow').innerHTML = renderStars(fortune.overallStars || 4.0);
+            document.getElementById('overviewText').textContent = fortune.overall || fortune.overallText || '暂无综合运势。';
 
-            document.getElementById('loveScore').textContent = scoreEmoji(fortune.loveStars);
-            document.getElementById('aspectLove').textContent = fortune.love;
-            document.getElementById('careerScore').textContent = scoreEmoji(fortune.careerStars);
-            document.getElementById('aspectCareer').textContent = fortune.career;
-            document.getElementById('wealthScore').textContent = scoreEmoji(fortune.wealthStars);
-            document.getElementById('aspectWealth').textContent = fortune.wealth;
-            document.getElementById('healthScore').textContent = scoreEmoji(fortune.healthStars);
-            document.getElementById('aspectHealth').textContent = fortune.health;
+            document.getElementById('loveScore').textContent = fortune.loveScore || scoreEmoji(fortune.loveStars || 4);
+            document.getElementById('aspectLove').textContent = fortune.love || '暂无爱情运势。';
+            document.getElementById('careerScore').textContent = fortune.careerScore || scoreEmoji(fortune.careerStars || 4);
+            document.getElementById('aspectCareer').textContent = fortune.career || '暂无事业运势。';
+            document.getElementById('wealthScore').textContent = fortune.wealthScore || scoreEmoji(fortune.wealthStars || 4);
+            document.getElementById('aspectWealth').textContent = fortune.wealth || '暂无财运。';
+            document.getElementById('healthScore').textContent = fortune.healthScore || scoreEmoji(fortune.healthStars || 4);
+            document.getElementById('aspectHealth').textContent = fortune.health || '暂无健康建议。';
 
-            document.getElementById('tarotIcon').textContent = fortune.tarot.icon;
-            document.getElementById('tarotName').textContent = '「' + fortune.tarot.name + '」' + fortune.tarot.position;
-            document.getElementById('tarotPosition').textContent = fortune.tarot.keywords;
-            document.getElementById('tarotMeaning').textContent = fortune.tarot.meaning;
+            document.getElementById('tarotIcon').textContent = fortune.tarotIcon || fortune.tarot?.icon || '🔮';
+            document.getElementById('tarotName').textContent = fortune.tarotName || fortune.tarot?.name || '未知塔罗';
+            document.getElementById('tarotPosition').textContent = fortune.tarotPosition || fortune.tarot?.position || '';
+            document.getElementById('tarotMeaning').textContent = fortune.tarotMeaning || fortune.tarot?.meaning || '';
 
-            document.getElementById('luckyNumber').textContent = fortune.luckyNumber;
-            document.getElementById('luckyColor').innerHTML =
-                `<span class="color-dot" style="background:${fortune.luckyColor.hex};color:${fortune.luckyColor.hex};"></span>${fortune.luckyColor.name}`;
-            document.getElementById('luckyZodiac').textContent = fortune.luckyZodiac.emoji + ' ' + fortune.luckyZodiac
-                .name;
-            document.getElementById('luckyStone').textContent = fortune.luckyStone;
+            if (fortune.luckyColor && !fortune.luckyColor.hex) {
+                document.getElementById('luckyColor').textContent = fortune.luckyColor;
+            } else {
+                document.getElementById('luckyColor').innerHTML = `<span class="color-dot" style="background:${fortune.luckyColor?.hex || '#8b5cf6'};color:${fortune.luckyColor?.hex || '#8b5cf6'};"></span>${fortune.luckyColor?.name || fortune.luckyColor || '星空紫'}`;
+            }
+            document.getElementById('luckyNumber').textContent = fortune.luckyNumber || '—';
+            document.getElementById('luckyZodiac').textContent = fortune.luckyZodiac || zodiac.emoji + ' ' + zodiac.name;
+            document.getElementById('luckyStone').textContent = fortune.luckyStone || zodiac.stone;
 
-            document.getElementById('goldenTime').innerHTML =
-                `⏰ 今日黄金时段：<strong>${fortune.goldenHour}:00 - ${fortune.goldenHour+2}:00</strong>  ·  这段时间你的决策力和创造力达到峰值`;
-
-            document.getElementById('mottoText').textContent = fortune.motto;
-
+            document.getElementById('goldenTime').innerHTML = fortune.goldenTime || '⏰ 今日黄金时段：10:00 - 12:00';
+            document.getElementById('mottoText').textContent = fortune.motto || fortune.mottoText || '愿星光引导你前行。';
             card.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
