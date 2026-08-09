@@ -32,12 +32,13 @@ export async function onRequest(context) {
   }
 
   const model = 'deepseek-v4-flash';
-  const prompt = `你是一名中文星座运势专家，需要为星座用户生成当天真实且专业的运势解读。请基于用户的星座和生日，输出一个 JSON 对象。不要包含任何多余说明，也不要输出非 JSON 文本。返回字段如下：overall, love, career, wealth, health, tarotName, tarotMeaning, luckyNumber, luckyColor, luckyZodiac, luckyStone, goldenTime, motto。` +
+  const prompt =
+    `你是一名中文星座运势专家，需要为星座用户生成当天真实且专业的运势解读。请基于用户的星座和生日，输出一个 JSON 对象。不要包含任何多余说明，也不要输出非 JSON 文本。返回字段如下：overall, love, career, wealth, health, tarotName, tarotMeaning, luckyNumber, luckyColor, luckyZodiac, luckyStone, goldenTime, motto。` +
     `\n星座索引: ${zodiacIndex}` +
     `\n生日: ${birthday}` +
     `\n要求：内容应富有星象学和占星分析感，兼顾实用建议和情绪提示。每个字段文字控制在 15-40 个汉字。`;
 
-  const apiUrl = env.DEESEEK_BASE_URL || 'https://api.deepseek.com/v1/responses';
+  const apiUrl = env.DEESEEK_BASE_URL || 'https://api.deepseek.com';
 
   let apiResponse;
   try {
@@ -49,7 +50,8 @@ export async function onRequest(context) {
       },
       body: JSON.stringify({
         model,
-        instructions: '你是一个专业的中文星座运势写手。请根据 input 生成符合字段要求的 JSON。不要输出 markdown、代码块或额外说明。',
+        instructions:
+          '你是一个专业的中文星座运势写手。请根据 input 生成符合字段要求的 JSON。不要输出 markdown、代码块或额外说明。',
         input: prompt,
         temperature: 0.9,
         max_output_tokens: 450,
@@ -58,29 +60,44 @@ export async function onRequest(context) {
 
     if (!res.ok) {
       const errorText = await res.text();
-      return new Response(JSON.stringify({ error: `DeepSeek API error ${res.status}.`, details: errorText }), {
-        status: 502,
-        headers: { 'content-type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: `DeepSeek API error ${res.status}.`, details: errorText }),
+        {
+          status: 502,
+          headers: { 'content-type': 'application/json' },
+        },
+      );
     }
 
     apiResponse = await res.json();
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'DeepSeek request failed.', details: error.message }), {
-      status: 502,
-      headers: { 'content-type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: 'DeepSeek request failed.', details: error.message }),
+      {
+        status: 502,
+        headers: { 'content-type': 'application/json' },
+      },
+    );
   }
 
-  const rawOutput = apiResponse.output_text || apiResponse.response?.output_text ||
-    (Array.isArray(apiResponse.output) ? apiResponse.output.map(item => item.content || '').join('') : '') ||
-    (Array.isArray(apiResponse.response?.output) ? apiResponse.response.output.map(item => item.content || '').join('') : '');
+  const rawOutput =
+    apiResponse.output_text ||
+    apiResponse.response?.output_text ||
+    (Array.isArray(apiResponse.output)
+      ? apiResponse.output.map((item) => item.content || '').join('')
+      : '') ||
+    (Array.isArray(apiResponse.response?.output)
+      ? apiResponse.response.output.map((item) => item.content || '').join('')
+      : '');
 
   if (!rawOutput) {
-    return new Response(JSON.stringify({ error: 'DeepSeek response did not contain output_text.', apiResponse }), {
-      status: 502,
-      headers: { 'content-type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: 'DeepSeek response did not contain output_text.', apiResponse }),
+      {
+        status: 502,
+        headers: { 'content-type': 'application/json' },
+      },
+    );
   }
 
   function extractJsonObject(text) {
@@ -126,14 +143,17 @@ export async function onRequest(context) {
   const parsed = tryParseJson(jsonText);
 
   if (!parsed) {
-    return new Response(JSON.stringify({
-      error: 'Failed to parse DeepSeek response as JSON.',
-      rawOutput: trimmedOutput,
-      apiResponse,
-    }), {
-      status: 502,
-      headers: { 'content-type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({
+        error: 'Failed to parse DeepSeek response as JSON.',
+        rawOutput: trimmedOutput,
+        apiResponse,
+      }),
+      {
+        status: 502,
+        headers: { 'content-type': 'application/json' },
+      },
+    );
   }
 
   return new Response(JSON.stringify({ data: parsed }), {
