@@ -49,7 +49,7 @@ export async function onRequest(context) {
       },
       body: JSON.stringify({
         model,
-        instructions: '你是一个专业的中文星座运势写手。请根据 input 生成符合字段要求的 JSON。',
+        instructions: '你是一个专业的中文星座运势写手。请根据 input 生成符合字段要求的 JSON。不要输出 markdown、代码块或额外说明。',
         input: prompt,
         temperature: 0.9,
         max_output_tokens: 450,
@@ -83,22 +83,51 @@ export async function onRequest(context) {
     });
   }
 
-  const trimmedOutput = rawOutput.trim();
-  const jsonStart = trimmedOutput.indexOf('{');
-  const jsonEnd = trimmedOutput.lastIndexOf('}');
-  const jsonText = jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart
-    ? trimmedOutput.slice(jsonStart, jsonEnd + 1)
-    : trimmedOutput;
+  function extractJsonObject(text) {
+    const cleaned = text.replace(/```[\s\S]*?```/g, '').trim();
+    const start = cleaned.indexOf('{');
+    if (start === -1) return null;
 
-  try {
-    const parsed = JSON.parse(jsonText);
-    return new Response(JSON.stringify({ data: parsed }), {
-      headers: { 'content-type': 'application/json' },
-    });
-  } catch (error) {
+    let depth = 0;
+    let end = -1;
+    for (let i = start; i < cleaned.length; i++) {
+      if (cleaned[i] === '{') depth += 1;
+      else if (cleaned[i] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          end = i;
+          break;
+        }
+      }
+    }
+    return end !== -1 ? cleaned.slice(start, end + 1) : null;
+  }
+
+  function tryParseJson(text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      const normalized = text
+        .replace(/```[\s\S]*?```/g, '')
+        .replace(/\r\n|\n|\r/g, ' ')
+        .replace(/([\{,])\s*([A-Za-z0-9_]+)\s*:/g, '$1"$2":')
+        .replace(/'([^']*)'/g, '"$1"');
+      try {
+        return JSON.parse(normalized);
+      } catch {
+        return null;
+      }
+    }
+  }
+
+  const trimmedOutput = rawOutput.trim();
+  const extractedJson = extractJsonObject(trimmedOutput);
+  const jsonText = extractedJson || trimmedOutput;
+  const parsed = tryParseJson(jsonText);
+
+  if (!parsed) {
     return new Response(JSON.stringify({
       error: 'Failed to parse DeepSeek response as JSON.',
-      parseError: error.message,
       rawOutput: trimmedOutput,
       apiResponse,
     }), {
@@ -106,4 +135,8 @@ export async function onRequest(context) {
       headers: { 'content-type': 'application/json' },
     });
   }
+
+  return new Response(JSON.stringify({ data: parsed }), {
+    headers: { 'content-type': 'application/json' },
+  });
 }
